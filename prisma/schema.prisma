@@ -9,3 +9,77 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum GENDER {
+  MALE
+  FEMALE
+}
+
+enum TITLE {
+  MR
+  MRS
+  MS
+  DR
+}
+
+enum ROLE {
+  DOCTOR
+  PATIENT
+  ADMIN
+  HOSPITAL
+}
+
+model User {
+  id              String   @id @default(cuid())
+  title           TITLE
+  email           String   @unique
+  password        String
+  full_name       String
+  gender          GENDER
+  phone           String   @unique
+  address         String
+  role            ROLE
+  profile_picture String?
+  date_of_birth   DateTime
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  Doctor          Doctor?
+  Patient         Patient?
+}
+
+model Patient {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  medicalId  String   @unique
+  allergies  String[]
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Doctor {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  specialization String
+  experience     Int
+  isActive       Boolean  @default(true)
+  isAvailable    Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id])
+  Hospital   Hospital? @relation(fields: [hospitalId], references: [id])
+  hospitalId String
+}
+
+model Hospital {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  address    String
+  phone      String   @unique
+  email      String   @unique
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  doctors    Doctor[]
+}
