@@ -1,7 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
-async function seedDatabase() {}
+async function seedDatabase() {
+    const seed = {};
+}
 
 async function main() {
     await seedDatabase();
