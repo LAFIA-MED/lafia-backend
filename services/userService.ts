@@ -150,13 +150,12 @@ export const completeDoctorProfile = async (
 /**
  * Verify OTP and update user status
  */
-export const verifyUserOTP = async (userId: string, password?: string) => {
+export const verifyUserOTP = async (userId: string) => {
     return await prisma.user.update({
         where: { id: userId },
         data: {
             isVerified: true,
             status: "VERIFIED",
-            ...(password && { password }),
         },
     });
 };
