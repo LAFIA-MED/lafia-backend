@@ -5,6 +5,8 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { errorHandler } from "./middleware/errorHandler";
 import { config } from "./config/env";
+import { hospitalRoutes } from "./routes/hospital";
+import { authRoutes } from "./routes/auth";
 
 const createApp = () => {
     const app = express();
@@ -31,7 +33,8 @@ const createApp = () => {
         res.json({ status: "OK", timestamp: new Date().toISOString() });
     });
 
-    // app.use("/api/auth", authRoutes);
+    app.use("/auth", authRoutes);
+    app.use("/hospitals", hospitalRoutes);
 
     app.use(/.*/, (req, res) => {
         res.status(404).json({ error: "Route not found" });
