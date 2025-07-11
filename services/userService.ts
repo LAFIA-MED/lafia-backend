@@ -116,6 +116,7 @@ export const completeDoctorProfile = async (
         license: string;
         date_of_birth?: Date;
         profile_picture?: string;
+        hospitalId: string;
     }
 ) => {
     const hashedPassword = await hashPassword(password);
@@ -138,6 +139,7 @@ export const completeDoctorProfile = async (
                 license: data.license,
                 isActive: false,
                 isAvailable: false,
+                hospitalId: data.hospitalId,
             },
         });
 
