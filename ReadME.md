@@ -39,9 +39,6 @@ Base path: `/auth`
   - `last_name` (string, required)
   - `gender` (string, required: "MALE" or "FEMALE")
   - `phone` (string, required)
-  - `allergies` (array of strings, optional)
-  - `profile_picture` (string, optional)
-  - `date_of_birth` (string, ISO date, optional)
 - **Query Parameters:** None
 - **Example Body:**
     ```json
@@ -51,9 +48,6 @@ Base path: `/auth`
       "last_name": "Doe",
       "gender": "FEMALE",
       "phone": "+2348012345678",
-      "allergies": ["penicillin", "nuts"],
-      "profile_picture": "https://example.com/pic.jpg",
-      "date_of_birth": "1990-01-01"
     }
     ```
 - **Response:**
@@ -72,11 +66,6 @@ Base path: `/auth`
   - `gender` (string, required: "MALE" or "FEMALE")
   - `phone` (string, required)
   - `hospitalId` (string, required)
-  - `specialization` (string, optional)
-  - `experience` (number, optional)
-  - `license` (string, optional)
-  - `profile_picture` (string, optional)
-  - `date_of_birth` (string, ISO date, optional)
 - **Query Parameters:** None
 - **Example Body:**
     ```json
