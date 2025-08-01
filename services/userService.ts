@@ -7,29 +7,45 @@ import {
 } from "../types";
 import { hashPassword } from "../utils/password";
 
-/**
- * Creates a new patient user with basic Patient record
- */
 export const createBasePatient = async (data: ICreatePatient) => {
     return await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
+        // Check if user exists and email matches
+        const existingUser = await tx.user.findUnique({
+            where: { id: data.userId },
+        });
+        if (!existingUser) {
+            throw new Error("User not found");
+        }
+        if (existingUser.email !== data.email) {
+            throw new Error("Email does not match the user record");
+        }
+        if (!existingUser.isVerified) {
+            throw new Error("Email verification required");
+        }
+
+        // Update existing user
+        const user = await tx.user.update({
+            where: { id: data.userId },
             data: {
-                email: data.email,
-                password: "",
                 first_name: data.first_name,
                 last_name: data.last_name,
                 gender: data.gender,
                 phone: data.phone,
                 role: "PATIENT",
                 status: "PENDING_VERIFICATION",
-                isVerified: false,
+                isVerified: true,
             },
         });
 
-        await tx.patient.create({
-            data: {
+        // Create or update patient record
+        await tx.patient.upsert({
+            where: { userId: data.userId },
+            update: {
+                allergies: data.allergies || [],
+            },
+            create: {
                 userId: user.id,
-                allergies: [],
+                allergies: data.allergies || [],
             },
         });
 
@@ -37,32 +53,53 @@ export const createBasePatient = async (data: ICreatePatient) => {
     });
 };
 
-/**
- * Creates a new doctor user with basic Doctor record
- */
 export const createBaseDoctor = async (data: ICreateDoctor) => {
     return await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
+        // Check if user exists and email matches
+        const existingUser = await tx.user.findUnique({
+            where: { id: data.userId },
+        });
+        if (!existingUser) {
+            throw new Error("User not found");
+        }
+        if (existingUser.email !== data.email) {
+            throw new Error("Email does not match the user record");
+        }
+        if (!existingUser.isVerified) {
+            throw new Error("Email verification required");
+        }
+
+        // Update existing user
+        const user = await tx.user.update({
+            where: { id: data.userId },
             data: {
-                email: data.email,
-                password: "",
                 first_name: data.first_name,
                 last_name: data.last_name,
                 gender: data.gender,
                 phone: data.phone,
                 role: "DOCTOR",
                 status: "PENDING_VERIFICATION",
-                isVerified: false,
+                isVerified: true,
             },
         });
 
-        await tx.doctor.create({
-            data: {
+        // Create or update doctor record
+        await tx.doctor.upsert({
+            where: { userId: data.userId },
+            update: {
+                hospitalId: data.hospitalId,
+                specialization: data.specialization,
+                experience: data.experience,
+                license: data.license,
+                isActive: false,
+                isAvailable: false,
+            },
+            create: {
                 userId: user.id,
                 hospitalId: data.hospitalId,
-                specialization: "",
-                experience: 0,
-                license: "",
+                specialization: data.specialization,
+                experience: data.experience,
+                license: data.license,
                 isActive: false,
                 isAvailable: false,
             },
@@ -72,21 +109,18 @@ export const createBaseDoctor = async (data: ICreateDoctor) => {
     });
 };
 
-/**
- * Complete patient profile after OTP verification
- */
 export const completePatientProfile = async (
     userId: string,
     password: string,
     data: {
         allergies?: string[];
-        date_of_birth?: Date;
+        date_of_birth: Date;
         profile_picture?: string;
     }
 ) => {
     const hashedPassword = await hashPassword(password);
     return await prisma.$transaction(async (tx) => {
-        await tx.user.update({
+        const user = await tx.user.update({
             where: { id: userId },
             data: {
                 password: hashedPassword,
@@ -96,14 +130,14 @@ export const completePatientProfile = async (
             },
         });
 
-        const patient = await tx.patient.update({
+        await tx.patient.update({
             where: { userId: userId },
             data: {
                 allergies: data.allergies || [],
             },
         });
 
-        return patient;
+        return user;
     });
 };
 
@@ -114,14 +148,14 @@ export const completeDoctorProfile = async (
         specialization: string;
         experience: number;
         license: string;
-        date_of_birth?: Date;
+        date_of_birth: Date;
         profile_picture?: string;
         hospitalId: string;
     }
 ) => {
     const hashedPassword = await hashPassword(password);
     return await prisma.$transaction(async (tx) => {
-        await tx.user.update({
+        const user = await tx.user.update({
             where: { id: userId },
             data: {
                 password: hashedPassword,
@@ -131,26 +165,31 @@ export const completeDoctorProfile = async (
             },
         });
 
-        const doctor = await tx.doctor.update({
+        await tx.doctor.update({
             where: { userId: userId },
             data: {
                 specialization: data.specialization,
                 experience: data.experience,
                 license: data.license,
+                hospitalId: data.hospitalId,
                 isActive: false,
                 isAvailable: false,
-                hospitalId: data.hospitalId,
             },
         });
 
-        return doctor;
+        return user;
     });
 };
 
-/**
- * Verify OTP and update user status
- */
 export const verifyUserOTP = async (userId: string) => {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+        throw new Error("User not found");
+    }
+    if (user.isVerified) {
+        throw new Error("Email already verified");
+    }
+
     return await prisma.user.update({
         where: { id: userId },
         data: {
@@ -160,9 +199,6 @@ export const verifyUserOTP = async (userId: string) => {
     });
 };
 
-/**
- * Check if user has completed their profile
- */
 export const hasCompletedProfile = async (userId: string) => {
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -175,12 +211,13 @@ export const hasCompletedProfile = async (userId: string) => {
     if (!user) return false;
 
     if (user.role === "PATIENT") {
-        return !!user.Patient && user.status === "VERIFIED";
+        return !!user.Patient && user.status === "VERIFIED" && !!user.password;
     } else if (user.role === "DOCTOR") {
         return (
             !!user.Doctor &&
             user.Doctor.specialization !== "" &&
             user.Doctor.license !== "" &&
+            !!user.password &&
             (user.status === "VERIFIED" ||
                 user.status === "PENDING_APPROVAL" ||
                 user.status === "APPROVED")
@@ -190,9 +227,6 @@ export const hasCompletedProfile = async (userId: string) => {
     return false;
 };
 
-/**
- * Updates a user and their associated role data
- */
 export const updateUser = async (
     userId: string,
     data: IUpdatePatient | IUpdateDoctor
@@ -245,10 +279,10 @@ export const updateUser = async (
     });
 };
 
-/**
- * Gets a user by ID with their role-specific data
- */
 export const getUserById = async (userId: string) => {
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
     return await prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -267,7 +301,7 @@ export const findUserByEmail = async (email: string) => {
         throw new Error("Email is required");
     }
 
-    const member = await prisma.user.findUnique({
+    return await prisma.user.findUnique({
         where: {
             email: email,
         },
@@ -276,8 +310,7 @@ export const findUserByEmail = async (email: string) => {
             email: true,
             role: true,
             password: true,
+            isVerified: true,
         },
     });
-
-    return member;
 };

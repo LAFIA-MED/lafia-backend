@@ -6,8 +6,14 @@ import { findUserByEmail } from "./userService";
 export const authenticateUser = async (loginData: ILogin) => {
     const user = await findUserByEmail(loginData.email);
 
-    if (!user || !user.password) {
+    if (!user) {
         throw new Error("Invalid credentials");
+    }
+    if (!user.isVerified) {
+        throw new Error("Email verification required");
+    }
+    if (!user.password) {
+        throw new Error("Profile setup incomplete");
     }
 
     const isPasswordValid = await comparePasswords(

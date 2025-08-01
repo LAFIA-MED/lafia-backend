@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { prisma } from "../config/database";
 import {
     createBasePatient,
     createBaseDoctor,
@@ -14,30 +15,110 @@ import { userSchemas } from "../utils/validators/user";
 import { ICreateDoctor, ICreatePatient, ILogin } from "../types";
 import { loginSchema } from "../utils/validators/auth";
 import { authenticateUser } from "../services/authService";
+import { GENDER } from "@prisma/client";
 
 const router = Router();
 
+// Middleware to check email verification status
+const requireEmailVerification = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required",
+            });
+        }
+        const user = await getUserById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        if (!user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Email verification required",
+            });
+        }
+        next();
+    } catch (error: any) {
+        res.status(500).json({
+            success: false,
+            message: error.message || "Internal server error",
+        });
+    }
+};
+
+// Submit email and generate OTP
 router.post(
-    "/register/patient",
-    validateBody(userSchemas.patient),
+    "/submit-email",
+    validateBody(userSchemas.email),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const userData = req.body as ICreatePatient;
+            const { email, role } = req.body;
 
-            const user = await createBasePatient(userData);
+            if (!["PATIENT", "DOCTOR"].includes(role)) {
+                res.status(400).json({
+                    success: false,
+                    message: "Invalid role. Must be PATIENT or DOCTOR",
+                });
+                return;
+            }
+
+            const existingUser = await prisma.user.findUnique({ where: { email } });
+
+            if (existingUser) {
+                if (existingUser.isVerified) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Email already verified",
+                    });
+                    return;
+                }
+                // Resend OTP for unverified user
+                const otpResult = await sendOTP(existingUser.id, "email");
+                res.status(200).json({
+                    success: true,
+                    message: "OTP sent successfully",
+                    data: {
+                        userId: existingUser.id,
+                        email: existingUser.email,
+                        role: existingUser.role,
+                    },
+                    otp: otpResult.otp,
+                });
+                return;
+            }
+
+            // Create minimal user record
+            const user = await prisma.user.create({
+                data: {
+                    email,
+                    role: role.toUpperCase(),
+                    password: "",
+                    first_name: "",
+                    last_name: "",
+                    gender: GENDER.MALE, // Temporary default
+                    phone: "",
+                    status: "PENDING_VERIFICATION",
+                    isVerified: false,
+                },
+            });
+
             const otpResult = await sendOTP(user.id, "email");
 
             res.status(201).json({
                 success: true,
-                message: "Patient registered successfully",
+                message: "Email submitted successfully, OTP sent",
                 data: {
-                    id: user.id,
+                    userId: user.id,
                     email: user.email,
                     role: user.role,
-                    status: user.status,
-                    isVerified: user.isVerified,
                 },
-                otp: otpResult,
+                otp: otpResult.otp,
             });
         } catch (error) {
             next(error);
@@ -45,48 +126,64 @@ router.post(
     }
 );
 
+// Verify email with OTP
 router.post(
-    "/register/doctor",
-    validateBody(userSchemas.doctor),
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const userData = req.body as ICreateDoctor;
-
-            const user = await createBaseDoctor(userData);
-            const otpResult = await sendOTP(user.id, "email");
-
-            res.status(201).json({
-                success: true,
-                message: "Doctor registered successfully",
-                data: {
-                    id: user.id,
-                    email: user.email,
-                    role: user.role,
-                    status: user.status,
-                    isVerified: user.isVerified,
-                },
-                otp: otpResult,
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
-);
-
-router.post(
-    "/verify-otp",
+    "/verify-email",
+    validateBody(userSchemas.otpVerification),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { userId, otp } = req.body;
 
+            const user = await getUserById(userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: "User not found" });
+                return;
+            }
+            if (user.isVerified) {
+                res.status(400).json({
+                    success: false,
+                    message: "Email already verified",
+                });
+                return;
+            }
+
             await verifyOTP(userId, otp);
-            const user = await verifyUserOTP(userId);
+            const updatedUser = await verifyUserOTP(userId);
 
             res.json({
                 success: true,
-                message: "OTP verified successfully",
+                message: "Email verified successfully",
                 data: {
-                    id: user.id,
+                    userId: updatedUser.id,
+                    email: updatedUser.email,
+                    role: updatedUser.role,
+                    isVerified: updatedUser.isVerified,
+                },
+            });
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message || "Invalid or expired OTP",
+            });
+        }
+    }
+);
+
+// Register patient (post-verification)
+router.post(
+    "/register/patient",
+    validateBody(userSchemas.patient),
+    requireEmailVerification,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const userData = req.body as ICreatePatient;
+            const user = await createBasePatient(userData);
+
+            res.status(201).json({
+                success: true,
+                message: "Patient registration initiated",
+                data: {
+                    userId: user.id,
                     email: user.email,
                     role: user.role,
                     status: user.status,
@@ -99,19 +196,59 @@ router.post(
     }
 );
 
+// Register doctor (post-verification)
+router.post(
+    "/register/doctor",
+    validateBody(userSchemas.doctor),
+    requireEmailVerification,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const userData = req.body as ICreateDoctor;
+            const user = await createBaseDoctor(userData);
+
+            res.status(201).json({
+                success: true,
+                message: "Doctor registration initiated",
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    isVerified: user.isVerified,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Resend OTP
 router.post(
     "/resend-otp",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { userId, method = "email" } = req.body;
 
-            await resendOTP(userId);
-            const otpResult = await sendOTP(userId, method);
+            const user = await getUserById(userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: "User not found" });
+                return;
+            }
+            if (user.isVerified) {
+                res.status(400).json({
+                    success: false,
+                    message: "Email already verified",
+                });
+                return;
+            }
+
+            const otp = await resendOTP(userId);
 
             res.json({
                 success: true,
                 message: "OTP resent successfully",
-                otp: otpResult,
+                otp,
             });
         } catch (error) {
             next(error);
@@ -119,12 +256,31 @@ router.post(
     }
 );
 
+// Login
 router.post(
     "/login",
     validateBody(loginSchema),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const loginData: ILogin = req.body;
+
+            const user = await prisma.user.findUnique({
+                where: { email: loginData.email },
+            });
+            if (!user) {
+                res.status(401).json({
+                    success: false,
+                    message: "Invalid credentials",
+                });
+                return;
+            }
+            if (!user.isVerified) {
+                res.status(403).json({
+                    success: false,
+                    message: "Email verification required",
+                });
+                return;
+            }
 
             const result = await authenticateUser(loginData);
 
@@ -133,49 +289,79 @@ router.post(
                 message: "Login successful",
                 ...result,
             });
-        } catch (error) {
-            next(error);
+        } catch (error: any) {
+            res.status(401).json({
+                success: false,
+                message: error.message || "Invalid credentials",
+            });
         }
     }
 );
 
+// Complete profile
 router.post(
     "/complete-profile",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
+            console.log("Request body:", req.body);
             const { userId, password, ...profileData } = req.body;
-            const user = await getUserById(userId);
-            
-            if (!user) {
-                throw new Error("User not found");
+
+            if (!userId) {
+                res.status(400).json({
+                    success: false,
+                    message: '"userId" is required',
+                });
+                return;
             }
-            if (!user.isVerified) {
-                throw new Error("User must verify OTP first");
+            const user = await getUserById(userId);
+
+            if (!user) {
+                res.status(404).json({ success: false, message: "User not found" });
+                return;
             }
 
             let result;
             if (user.role === "PATIENT") {
-                result = await completePatientProfile(userId, password, profileData);
+                const validatedData = await userSchemas.completePatientProfile.validateAsync({
+                        userId,
+                        password,
+                        ...profileData,
+                    },
+                    { abortEarly: false }
+                );
+                result = await completePatientProfile(userId, password, validatedData);
                 res.json({
                     success: true,
                     message: "Patient profile completed",
                     data: result,
                 });
             } else if (user.role === "DOCTOR") {
-                result = await completeDoctorProfile(userId, password, profileData);
+                const validatedData = await userSchemas.doctor.validateAsync({
+                        userId,
+                        password,
+                    ...profileData,
+                },
+                { abortEarly: false }
+            );
+                result = await completeDoctorProfile(userId, password, validatedData);
                 res.json({
                     success: true,
                     message: "Doctor profile submitted for approval",
                     data: result,
                 });
+            } else {
+                res.status(400).json({ success: false, message: "Invalid role" });
             }
-        } catch (error) {
-            next(error);
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message || "Profile completion failed",
+            });
         }
     }
 );
 
-
+// Profile status
 router.get(
     "/profile-status/:userId",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {

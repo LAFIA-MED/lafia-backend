@@ -8,6 +8,11 @@ export interface AuthenticatedRequest extends Request {
     };
 }
 
+export interface IStartRegistration {
+    email: string;
+    role: ROLE;
+}
+
 export interface ILogin {
     email: string;
     password: string;
@@ -26,10 +31,12 @@ export interface ICreateUser {
 }
 
 export interface ICreatePatient extends ICreateUser {
+    userId: string;
     allergies: string[];
 }
 
 export interface ICreateDoctor extends ICreateUser {
+    userId: string;
     specialization: string;
     experience: number;
     license: string;
