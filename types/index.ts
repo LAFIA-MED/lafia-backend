@@ -59,3 +59,13 @@ export interface IUpdateDoctor extends IUpdateUser {
     isActive?: boolean;
     isAvailable?: boolean;
 }
+
+export interface ICreateAppointment {
+    patientId: string;
+    doctorId: string;
+    typeOfCare: string;
+    description: string;
+    appointmentType: string;
+    appointmentDate: Date;
+    additionalNote: string;
+}

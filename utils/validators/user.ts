@@ -46,6 +46,16 @@ const doctorSchema = baseUserSchema.keys({
     hospitalId: Joi.string().required(),
 });
 
+const appointmentSchema = baseUserSchema.keys({
+    patientId: Joi.string().required(),
+    doctorId: Joi.string().required(),
+    typeOfCare: Joi.string().min(3).required(),
+    description: Joi.string().min(5).optional(),
+    appointmentType: Joi.string().valid("VIDEO CALL", "VOICE CALL", "IN_PERSON").required(),
+    appointmentDate: Joi.date().greater("now").required(),
+    additionalNote: Joi.string().optional(),
+});
+
 const adminSchema = baseUserSchema.keys({
     role: Joi.string().valid("ADMIN", "HOSPITAL").required(),
 });
@@ -55,4 +65,5 @@ export const userSchemas = {
     doctor: doctorSchema,
     admin: adminSchema,
     base: baseUserSchema,
+    appointment: appointmentSchema
 };
