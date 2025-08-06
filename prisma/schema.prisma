@@ -1,4 +1,4 @@
-/ This is your Prisma schema file,
+// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -34,19 +34,20 @@ model User {
   id              String    @id @default(cuid())
   email           String    @unique
   password        String?
-  first_name      String
-  last_name       String
-  gender          GENDER
-  phone           String    @unique
+  first_name      String?
+  last_name       String?
+  gender          GENDER?
+  phone           String?   @unique
   role            ROLE
-  status          STATUS
-  isVerified      Boolean
+  status          STATUS    @default(PENDING_VERIFICATION)
+  isVerified      Boolean   @default(false)
   profile_picture String?
   date_of_birth   DateTime?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
   Doctor          Doctor?
   Patient         Patient?
+  HospitalUser    HospitalUser?
   otps            OTP[]
 
   @@map("users")
@@ -59,7 +60,7 @@ model Patient {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("patients")
 }
@@ -75,7 +76,7 @@ model Doctor {
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
-  user       User      @relation(fields: [userId], references: [id])
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   Hospital   Hospital? @relation(fields: [hospitalId], references: [id])
   hospitalId String
 
@@ -83,17 +84,31 @@ model Doctor {
 }
 
 model Hospital {
-  id         String   @id @default(cuid())
-  name       String   @unique
-  address    String
-  license    String
-  phone      String   @unique
-  email      String   @unique
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  doctors    Doctor[]
+  id           String         @id @default(cuid())
+  name         String         @unique
+  address      String
+  license      String
+  phone        String         @unique
+  email        String         @unique
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+  doctors      Doctor[]
+  hospitalUsers HospitalUser[]
 
   @@map("hospitals")
+}
+
+model HospitalUser {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  hospitalId String   @unique
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@map("hospital_users")
 }
 
 model Drugs {

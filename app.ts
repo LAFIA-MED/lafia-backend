@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { config } from "./config/env";
 import { hospitalRoutes } from "./routes/hospital";
 import { authRoutes } from "./routes/auth";
+import { userRoutes } from "./routes/user";
 
 const createApp = () => {
     const app = express();
@@ -35,6 +36,7 @@ const createApp = () => {
 
     app.use("/auth", authRoutes);
     app.use("/hospitals", hospitalRoutes);
+    app.use("/users", userRoutes);
 
     app.use(/.*/, (req, res) => {
         res.status(404).json({ error: "Route not found" });
