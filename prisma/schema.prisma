@@ -58,6 +58,7 @@ model Patient {
   allergies  String[]
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+  Appointment Appointment[]
 
   user User @relation(fields: [userId], references: [id])
 
@@ -74,6 +75,7 @@ model Doctor {
   isAvailable    Boolean  @default(true)
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
+  Appointment   Appointment[]
 
   user       User      @relation(fields: [userId], references: [id])
   Hospital   Hospital? @relation(fields: [hospitalId], references: [id])
@@ -115,4 +117,21 @@ model OTP {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("otps")
+}
+
+model Appointment {
+  id        String    @id @default(cuid())
+  typeOfCare  String
+  description String
+  appointmentType String
+  appointmentDate DateTime
+  additionalNote String
+
+  patient Patient @relation(fields: [patientId], references: [userId])
+  doctor Doctor @relation(fields: [doctorId], references: [userId])
+
+  patientId String
+  doctorId  String
+
+  @@map("appointments")
 }

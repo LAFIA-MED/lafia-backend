@@ -1,4 +1,6 @@
+import { Request } from "express";
 import { GENDER, ROLE } from "@prisma/client";
+
 
 export interface AuthenticatedRequest extends Request {
     user?: {
@@ -58,4 +60,14 @@ export interface IUpdateDoctor extends IUpdateUser {
     hospitalId?: string;
     isActive?: boolean;
     isAvailable?: boolean;
+}
+
+export interface ICreateAppointment {
+    patientId: string;
+    doctorId: string;
+    typeOfCare: string;
+    description: string;
+    appointmentType: string;
+    appointmentDate: Date;
+    additionalNote: string;
 }
