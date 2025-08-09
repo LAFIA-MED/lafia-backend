@@ -2,17 +2,18 @@ import { Router, Request, Response, NextFunction } from "express";
 import { createAppointment } from "../services/appointmentService";
 import { validateBody } from "../middleware/validateBody";
 import { userSchemas } from "../utils/validators/user";
-import { ICreateAppointment } from "../types";
+import { AuthenticatedRequest, ICreateAppointment } from "../types";
 import { getUserById } from "../services/userService";
 
 const router = Router();
 
 
-router.post("/new", validateBody(userSchemas.appointment), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post("/new", validateBody(userSchemas.appointment), async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const appointmentData = req.body as ICreateAppointment;
+        const appointmentData: ICreateAppointment = req.body;
+        
         const appointment = await createAppointment(appointmentData);
-        const doctor = await getUserById(appointment.doctorID)
+        const doctor = await getUserById(appointment.doctorId)
 
         res.status(201).json({
             success: true,

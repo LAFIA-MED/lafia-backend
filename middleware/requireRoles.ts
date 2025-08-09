@@ -6,7 +6,8 @@ import { AuthenticatedRequest } from "../types";
 export const requireRoles = (allowedRoles: ROLE[]) => {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         try {
-            const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+            // const authHeader = req?.headers?.get('authorization') || req?.headers?.get('Authorization');
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'];
             const token = typeof authHeader === 'string' ? authHeader.split(" ")[1] : undefined;
 
             if (!token) {

@@ -127,11 +127,11 @@ model Appointment {
   appointmentDate DateTime
   additionalNote String
 
-  patient Patient @relation(fields: [patientID], references: [userId])
-  doctor Doctor @relation(fields: [doctorID], references: [userId])
+  patient Patient @relation(fields: [patientId], references: [userId])
+  doctor Doctor @relation(fields: [doctorId], references: [userId])
 
-  patientID String
-  doctorID  String
+  patientId String
+  doctorId  String
 
   @@map("appointments")
 }

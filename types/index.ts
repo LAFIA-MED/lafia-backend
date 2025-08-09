@@ -1,4 +1,6 @@
+import { Request } from "express";
 import { GENDER, ROLE } from "@prisma/client";
+
 
 export interface AuthenticatedRequest extends Request {
     user?: {
