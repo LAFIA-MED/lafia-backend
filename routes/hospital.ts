@@ -1,17 +1,27 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { getAllHospitals } from "../services/hospitalService";
+import { 
+    getAllHospitals, 
+    getHospitalById, 
+    createHospital, 
+    updateHospital, 
+    deleteHospital 
+} from "../services/hospitalService";
+import { validateBody } from "../middleware/validateBody";
+import { userSchemas } from "../utils/validators/user";
+import { requireRoles } from "../middleware/requireRoles";
+import { ROLE } from "@prisma/client";
 
 const router = Router();
 
-router.post(
+// Get all hospitals
+router.get(
     "/",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const hospitals = getAllHospitals();
-
-            res.status(201).json({
+            const result = await getAllHospitals();
+            res.status(200).json({
                 success: true,
-                ...hospitals,
+                ...result,
             });
         } catch (error) {
             next(error);
@@ -19,4 +29,83 @@ router.post(
     }
 );
 
-export { router as hospitalRoutes}
+// Get hospital by ID
+router.get(
+    "/:hospitalId",
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { hospitalId } = req.params;
+            const hospital = await getHospitalById(hospitalId);
+            
+            res.status(200).json({
+                success: true,
+                message: "Hospital retrieved successfully",
+                data: hospital,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Create hospital (requires admin authentication)
+router.post(
+    "/",
+    requireRoles([ROLE.ADMIN]),
+    validateBody(userSchemas.createHospital),
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const hospital = await createHospital(req.body);
+            
+            res.status(201).json({
+                success: true,
+                message: "Hospital created successfully",
+                data: hospital,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Update hospital (requires admin authentication)
+router.put(
+    "/:hospitalId",
+    requireRoles([ROLE.ADMIN]),
+    validateBody(userSchemas.updateHospital),
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { hospitalId } = req.params;
+            const hospital = await updateHospital(hospitalId, req.body);
+            
+            res.status(200).json({
+                success: true,
+                message: "Hospital updated successfully",
+                data: hospital,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Delete hospital (requires admin authentication)
+router.delete(
+    "/:hospitalId",
+    requireRoles([ROLE.ADMIN]),
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const { hospitalId } = req.params;
+            const result = await deleteHospital(hospitalId);
+            
+            res.status(200).json({
+                success: true,
+                ...result,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+export { router as hospitalRoutes };

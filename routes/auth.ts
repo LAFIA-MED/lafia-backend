@@ -1,43 +1,71 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { prisma } from "../config/database";
 import {
-    createBasePatient,
-    createBaseDoctor,
+    createInitialUser,
+    createPatient,
+    createDoctor,
+    createHospital,
+    createHospitalUser,
     verifyUserOTP,
     getUserById,
-    completePatientProfile,
-    completeDoctorProfile,
     hasCompletedProfile,
 } from "../services/userService";
 import { sendOTP, verifyOTP, resendOTP } from "../utils/otp";
 import { validateBody } from "../middleware/validateBody";
+import { requireEmailVerification } from "../middleware/requireEmailVerification";
 import { userSchemas } from "../utils/validators/user";
-import { ICreateDoctor, ICreatePatient, ILogin } from "../types";
 import { loginSchema } from "../utils/validators/auth";
 import { authenticateUser } from "../services/authService";
+import { IEmailVerification, IOTPVerification, ICreatePatient, ICreateDoctor, ICreateHospital, ICreateHospitalUser } from "../types";
 
 const router = Router();
 
+// Step 1: Submit email and generate OTP
 router.post(
-    "/register/patient",
-    validateBody(userSchemas.patient),
+    "/submit-email",
+    validateBody(userSchemas.emailVerification),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const userData = req.body as ICreatePatient;
+            const { email, role } = req.body as IEmailVerification;
 
-            const user = await createBasePatient(userData);
+            const existingUser = await prisma.user.findUnique({ where: { email } });
+
+            if (existingUser) {
+                if (existingUser.isVerified) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Email already verified and registered",
+                    });
+                    return;
+                }
+                // Resend OTP for unverified user
+                const otpResult = await sendOTP(existingUser.id, "email");
+                res.status(200).json({
+                    success: true,
+                    message: "OTP sent successfully",
+                    data: {
+                        userId: existingUser.id,
+                        email: existingUser.email,
+                        role: existingUser.role,
+                    },
+                    otp: otpResult.otp, // Remove in production
+                });
+                return;
+            }
+
+            // Create initial user record
+            const user = await createInitialUser(email, role);
             const otpResult = await sendOTP(user.id, "email");
 
             res.status(201).json({
                 success: true,
-                message: "Patient registered successfully",
+                message: "Email submitted successfully, OTP sent",
                 data: {
-                    id: user.id,
+                    userId: user.id,
                     email: user.email,
                     role: user.role,
-                    status: user.status,
-                    isVerified: user.isVerified,
                 },
-                otp: otpResult,
+                otp: otpResult.otp, // Remove in production
             });
         } catch (error) {
             next(error);
@@ -45,73 +73,76 @@ router.post(
     }
 );
 
+// Step 1: Verify email with OTP
 router.post(
-    "/register/doctor",
-    validateBody(userSchemas.doctor),
+    "/verify-email",
+    validateBody(userSchemas.otpVerification),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const userData = req.body as ICreateDoctor;
+            const { userId, otp } = req.body as IOTPVerification;
 
-            const user = await createBaseDoctor(userData);
-            const otpResult = await sendOTP(user.id, "email");
-
-            res.status(201).json({
-                success: true,
-                message: "Doctor registered successfully",
-                data: {
-                    id: user.id,
-                    email: user.email,
-                    role: user.role,
-                    status: user.status,
-                    isVerified: user.isVerified,
-                },
-                otp: otpResult,
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
-);
-
-router.post(
-    "/verify-otp",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const { userId, otp } = req.body;
+            const user = await getUserById(userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: "User not found" });
+                return;
+            }
+            if (user.isVerified) {
+                res.status(400).json({
+                    success: false,
+                    message: "Email already verified",
+                });
+                return;
+            }
 
             await verifyOTP(userId, otp);
-            const user = await verifyUserOTP(userId);
+            const updatedUser = await verifyUserOTP(userId);
 
             res.json({
                 success: true,
-                message: "OTP verified successfully",
+                message: "Email verified successfully",
                 data: {
-                    id: user.id,
-                    email: user.email,
-                    role: user.role,
-                    status: user.status,
-                    isVerified: user.isVerified,
+                    userId: updatedUser.id,
+                    email: updatedUser.email,
+                    role: updatedUser.role,
+                    isVerified: updatedUser.isVerified,
                 },
             });
-        } catch (error) {
-            next(error);
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message || "Invalid or expired OTP",
+            });
         }
     }
 );
 
+// Step 1: Resend OTP
 router.post(
     "/resend-otp",
+    validateBody(userSchemas.resendOTP),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             const { userId, method = "email" } = req.body;
 
-            await resendOTP(userId);
-            const otpResult = await sendOTP(userId, method);
+            const user = await getUserById(userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: "User not found" });
+                return;
+            }
+            if (user.isVerified) {
+                res.status(400).json({
+                    success: false,
+                    message: "Email already verified",
+                });
+                return;
+            }
+
+            const otp = await resendOTP(userId);
 
             res.json({
                 success: true,
                 message: "OTP resent successfully",
-                otp: otpResult,
+                otp: otp, // Remove in production
             });
         } catch (error) {
             next(error);
@@ -119,63 +150,135 @@ router.post(
     }
 );
 
+// Step 2: Create patient profile
+router.post(
+    "/create-patient",
+    validateBody(userSchemas.createPatient),
+    requireEmailVerification,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const userData = req.body as ICreatePatient;
+            const user = await createPatient(userData);
+
+            res.status(201).json({
+                success: true,
+                message: "Patient profile created successfully",
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    isVerified: user.isVerified,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Step 2: Create doctor profile
+router.post(
+    "/create-doctor",
+    validateBody(userSchemas.createDoctor),
+    requireEmailVerification,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const userData = req.body as ICreateDoctor;
+            const user = await createDoctor(userData);
+
+            res.status(201).json({
+                success: true,
+                message: "Doctor profile created successfully",
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    isVerified: user.isVerified,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Step 2: Create hospital (separate from hospital user)
+router.post(
+    "/create-hospital",
+    validateBody(userSchemas.createHospital),
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const hospitalData = req.body as ICreateHospital;
+            const hospital = await createHospital(hospitalData);
+
+            res.status(201).json({
+                success: true,
+                message: "Hospital created successfully",
+                data: {
+                    hospitalId: hospital.id,
+                    name: hospital.name,
+                    email: hospital.email,
+                    phone: hospital.phone,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Step 2: Create hospital user profile
+router.post(
+    "/create-hospital-user",
+    validateBody(userSchemas.createHospitalUser),
+    requireEmailVerification,
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        try {
+            const userData = req.body as ICreateHospitalUser;
+            const user = await createHospitalUser(userData);
+
+            res.status(201).json({
+                success: true,
+                message: "Hospital user profile created successfully",
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    isVerified: user.isVerified,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+// Login
 router.post(
     "/login",
     validateBody(loginSchema),
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            const loginData: ILogin = req.body;
-
-            const result = await authenticateUser(loginData);
+            const result = await authenticateUser(req.body);
 
             res.json({
                 success: true,
                 message: "Login successful",
                 ...result,
             });
-        } catch (error) {
-            next(error);
+        } catch (error: any) {
+            res.status(401).json({
+                success: false,
+                message: error.message || "Invalid credentials",
+            });
         }
     }
 );
 
-router.post(
-    "/complete-profile",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const { userId, password, ...profileData } = req.body;
-            const user = await getUserById(userId);
-            
-            if (!user) {
-                throw new Error("User not found");
-            }
-            if (!user.isVerified) {
-                throw new Error("User must verify OTP first");
-            }
-
-            let result;
-            if (user.role === "PATIENT") {
-                result = await completePatientProfile(userId, password, profileData);
-                res.json({
-                    success: true,
-                    message: "Patient profile completed",
-                    data: result,
-                });
-            } else if (user.role === "DOCTOR") {
-                result = await completeDoctorProfile(userId, password, profileData);
-                res.json({
-                    success: true,
-                    message: "Doctor profile submitted for approval",
-                    data: result,
-                });
-            }
-        } catch (error) {
-            next(error);
-        }
-    }
-);
-
-
+// Profile status
 router.get(
     "/profile-status/:userId",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {

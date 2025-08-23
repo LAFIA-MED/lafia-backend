@@ -107,7 +107,7 @@ export const sendOTP = async (
     await storeOTP(userId, otp);
 
     if (method === "email") {
-        await sendOTPEmail(user.email, user.first_name, otp);
+        await sendOTPEmail(user.email, user.first_name || "User", otp);
     }
 
     return {
