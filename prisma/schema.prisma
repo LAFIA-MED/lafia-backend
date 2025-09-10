@@ -30,25 +30,40 @@ enum STATUS {
   REJECTED
 }
 
+enum MESSAGE_TYPE {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum CHAT_STATUS {
+  ACTIVE
+  ARCHIVED
+  BLOCKED
+}
+
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
+  id              String        @id @default(cuid())
+  email           String        @unique
   password        String?
   first_name      String?
   last_name       String?
   gender          GENDER?
-  phone           String?   @unique
+  phone           String?       @unique
   role            ROLE
-  status          STATUS    @default(PENDING_VERIFICATION)
-  isVerified      Boolean   @default(false)
+  status          STATUS        @default(PENDING_VERIFICATION)
+  isVerified      Boolean       @default(false)
   profile_picture String?
   date_of_birth   DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
   Doctor          Doctor?
   Patient         Patient?
   HospitalUser    HospitalUser?
   otps            OTP[]
+  sentMessages     Message[]         @relation("MessageSender")
+  chatParticipants ChatParticipant[]
 
   @@map("users")
 }
@@ -84,15 +99,15 @@ model Doctor {
 }
 
 model Hospital {
-  id           String         @id @default(cuid())
-  name         String         @unique
-  address      String
-  license      String
-  phone        String         @unique
-  email        String         @unique
-  created_at   DateTime       @default(now())
-  updated_at   DateTime       @updatedAt
-  doctors      Doctor[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  address       String
+  license       String
+  phone         String         @unique
+  email         String         @unique
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  doctors       Doctor[]
   hospitalUsers HospitalUser[]
 
   @@map("hospitals")
@@ -109,6 +124,51 @@ model HospitalUser {
   hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
 
   @@map("hospital_users")
+}
+
+model Chat {
+  id              String      @id @default(cuid())
+  status          CHAT_STATUS @default(ACTIVE)
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+  last_message_at DateTime?
+
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@map("chats")
+}
+
+model ChatParticipant {
+  id           String    @id @default(cuid())
+  chatId       String
+  userId       String
+  joined_at    DateTime  @default(now())
+  last_read_at DateTime?
+  unread_count Int       @default(0)
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id           String       @id @default(cuid())
+  chatId       String
+  senderId     String
+  content      String
+  message_type MESSAGE_TYPE @default(TEXT)
+  file_url     String?
+  is_edited    Boolean      @default(false)
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
 }
 
 model Drugs {

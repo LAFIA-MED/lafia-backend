@@ -18,9 +18,9 @@ export const createInitialUser = async (email: string, role: string) => {
             role: role.toUpperCase() as any,
             status: "PENDING_VERIFICATION",
             isVerified: false,
-            first_name: "", // Temporary default
-            last_name: "", // Temporary default
-            gender: "MALE" as any, // Temporary default
+            first_name: "",
+            last_name: "",
+            gender: "MALE" as any,
         },
     });
 };
@@ -195,10 +195,8 @@ export const createHospital = async (data: ICreateHospital) => {
     });
 };
 
-// Step 2: Create hospital user
 export const createHospitalUser = async (data: ICreateHospitalUser) => {
     return await prisma.$transaction(async (tx) => {
-        // Verify user exists and email matches
         const existingUser = await tx.user.findUnique({
             where: { id: data.userId },
         });
