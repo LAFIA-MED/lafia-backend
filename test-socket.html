@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Test Client</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="status">Not Connected</div>
+    <div>
+        <input type="text" id="token" placeholder="Enter JWT token">
+        <button onclick="connect()">Connect</button>
+    </div>
+    
+    <!-- Chat Creation Section -->
+    <div style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;">
+        <h3>Create New Chat</h3>
+        <input type="text" id="participantId" placeholder="Enter Participant ID">
+        <button onclick="createChat()">Create Chat</button>
+    </div>
+
+    <!-- Get User Chats Section -->
+    <div style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;">
+        <h3>Your Chats</h3>
+        <button onclick="getUserChats()">Get My Chats</button>
+        <div id="chatsList"></div>
+    </div>
+
+    <!-- Chat Operation Section -->
+    <div style="margin: 20px 0; padding: 10px; border: 1px solid #ccc;">
+        <h3>Chat Operations</h3>
+        <input type="text" id="chatId" placeholder="Enter Chat ID">
+        <button onclick="joinChat()">Join Chat</button>
+        <div>
+            <input type="text" id="messageInput" placeholder="Type a message">
+            <button onclick="sendMessage()">Send Message</button>
+        </div>
+    </div>
+
+    <div id="messages" style="height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 8px;"></div>
+
+    <script>
+        let socket;
+        let currentToken;
+
+        function connect() {
+            currentToken = document.getElementById('token').value;
+            socket = io('http://localhost:3000', {
+                auth: {
+                    token: currentToken
+                }
+            });
+
+            socket.on('connect', () => {
+                document.getElementById('status').textContent = 'Connected';
+                console.log('Connected to server');
+                // Get user chats after connection
+                getUserChats();
+            });
+
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+            });
+
+            socket.on('newMessage', (message) => {
+                console.log('New message:', message);
+                const messagesDiv = document.getElementById('messages');
+                const messageElement = document.createElement('div');
+                messageElement.style.margin = '10px';
+                messageElement.style.padding = '10px';
+                messageElement.style.backgroundColor = '#f0f0f0';
+                messageElement.style.borderRadius = '8px';
+                messageElement.style.maxWidth = '80%';
+
+                // Add sender info
+                const senderInfo = message.sender ? 
+                    `<strong>${message.sender.first_name} ${message.sender.last_name}</strong> (${message.sender.role})` : 
+                    'Unknown Sender';
+
+                messageElement.innerHTML = `
+                    <div style="color: #666; font-size: 0.9em; margin-bottom: 5px;">
+                        ${senderInfo}
+                    </div>
+                    <div style="margin: 5px 0;">
+                        ${message.content}
+                    </div>
+                    <div style="color: #999; font-size: 0.8em; text-align: right;">
+                        ${new Date(message.created_at || Date.now()).toLocaleTimeString()}
+                    </div>
+                `;
+
+                messagesDiv.appendChild(messageElement);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to latest message
+            });
+
+            socket.on('messagesRead', ({ chatId, userId }) => {
+                console.log(`Messages read in chat ${chatId} by user ${userId}`);
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status').textContent = 'Disconnected';
+            });
+        }
+
+        async function createChat() {
+            const participantId = document.getElementById('participantId').value;
+            
+            try {
+                const response = await fetch('http://localhost:3000/chat/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        participantId
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    console.log('Chat created:', data);
+                    alert(`Chat created! Chat ID: ${data.data.id}`);
+                    getUserChats(); // Refresh chats list
+                } else {
+                    alert('Error creating chat: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error creating chat:', error);
+                alert('Error creating chat: ' + error.message);
+            }
+        }
+
+        async function getUserChats() {
+            try {
+                const response = await fetch('http://localhost:3000/chat', {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+
+                const data = await response.json();
+                console.log('Response data:', data); // Debug log
+                
+                if (data.success) {
+                    const chatsListDiv = document.getElementById('chatsList');
+                    chatsListDiv.innerHTML = '<h4>Your Chats:</h4>';
+                    
+                    // Check if data.data exists and is an array
+                    if (Array.isArray(data.data)) {
+                        data.data.forEach(chat => {
+                            const chatElement = document.createElement('div');
+                            chatElement.style.margin = '10px 0';
+                            chatElement.style.padding = '10px';
+                            chatElement.style.border = '1px solid #eee';
+                            
+                            // Check if chat has participants array
+                            if (chat && chat.participants && Array.isArray(chat.participants)) {
+                                // Find the other participant (not the current user)
+                                const otherParticipant = chat.participants
+                                    .filter(p => p && p.user) // Make sure participant and user exist
+                                    .map(p => p.user)
+                                    .find(user => user && user.id !== chat.currentUserId);
+
+                                chatElement.innerHTML = `
+                                    <div>Chat ID: ${chat.id}</div>
+                                    <div>With: ${otherParticipant ? 
+                                        `${otherParticipant.first_name || ''} ${otherParticipant.last_name || ''}`.trim() || 'Unknown' 
+                                        : 'Unknown'}</div>
+                                    <button onclick="selectChat('${chat.id}')">Select This Chat</button>
+                                `;
+                            } else {
+                                chatElement.innerHTML = `
+                                    <div>Chat ID: ${chat.id || 'Unknown'}</div>
+                                    <div>With: Unknown</div>
+                                    <button onclick="selectChat('${chat.id}')">Select This Chat</button>
+                                `;
+                            }
+                            chatsListDiv.appendChild(chatElement);
+                        });
+                    } else {
+                        chatsListDiv.innerHTML += '<p>No chats found</p>';
+                    }
+                } else {
+                    alert('Error getting chats: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error getting chats:', error);
+                alert('Error getting chats: ' + error.message);
+            }
+        }
+
+        function selectChat(chatId) {
+            document.getElementById('chatId').value = chatId;
+            joinChat();
+        }
+
+        function joinChat() {
+            const chatId = document.getElementById('chatId').value;
+            socket.emit('joinChat', chatId);
+            console.log('Joining chat:', chatId);
+        }
+
+        function sendMessage() {
+            const chatId = document.getElementById('chatId').value;
+            const content = document.getElementById('messageInput').value;
+            
+            socket.emit('sendMessage', {
+                chatId: chatId,
+                content: content,
+                messageType: 'TEXT'
+            });
+
+            document.getElementById('messageInput').value = '';
+        }
+    </script>
+</body>
+</html>
