@@ -11,9 +11,8 @@ import { userSchemas } from "../utils/validators/user";
 import { requireRoles } from "../middleware/requireRoles";
 import { ROLE } from "@prisma/client";
 
-const router = Router();
+const router = Router()
 
-// Get all hospitals
 router.get(
     "/",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -29,7 +28,6 @@ router.get(
     }
 );
 
-// Get hospital by ID
 router.get(
     "/:hospitalId",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -48,7 +46,6 @@ router.get(
     }
 );
 
-// Create hospital (requires admin authentication)
 router.post(
     "/",
     requireRoles([ROLE.ADMIN]),
@@ -68,7 +65,6 @@ router.post(
     }
 );
 
-// Update hospital (requires admin authentication)
 router.put(
     "/:hospitalId",
     requireRoles([ROLE.ADMIN]),
@@ -89,7 +85,6 @@ router.put(
     }
 );
 
-// Delete hospital (requires admin authentication)
 router.delete(
     "/:hospitalId",
     requireRoles([ROLE.ADMIN]),
