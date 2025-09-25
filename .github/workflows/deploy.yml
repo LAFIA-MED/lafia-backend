@@ -22,6 +22,6 @@ jobs:
           username: ubuntu # Default username for Ubuntu AMI
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /var/www/html/lafia-backend  
-            git pull origin main  
-            sudo pm2 restart app || sudo systemctl restart your-service
+            cd /var/www/html/lafia-backend  # Path to your app folder on EC2
+            git pull origin main  # Pull the latest code from your repo
+            pm2 restart app || pm2 reload app # Use PM2 to restart the app directly
