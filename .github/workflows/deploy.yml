@@ -24,4 +24,4 @@ jobs:
           script: |
             cd /var/www/html/lafia-backend  
             git pull origin main  
-            pm2 restart app || systemctl restart your-service
+            sudo pm2 restart app || sudo systemctl restart your-service
