@@ -24,4 +24,4 @@ jobs:
           script: |
             cd /var/www/html/lafia-backend  # Path to your app folder on EC2
             git pull origin main  # Pull the latest code from your repo
-            pm2 restart app || pm2 reload app # Use PM2 to restart the app directly
+            pm2 restart ts-node || pm2 reload ts-node # Restart the correct PM2 process
