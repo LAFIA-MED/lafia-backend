@@ -16,6 +16,8 @@ import { setupSocket } from "./utils/socketHandler";
 const createApp = () => {
   const app = express();
   const httpServer = createServer(app);
+
+  console.log('Creating the app...');
   const io = new SocketIOServer(httpServer, {
     cors: {
       origin: config.allowedOrigins,
