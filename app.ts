@@ -11,6 +11,7 @@ import { hospitalRoutes } from "./routes/hospital";
 import { authRoutes } from "./routes/auth";
 import { userRoutes } from "./routes/user";
 import { chatRoutes } from "./routes/chat";
+import { prescriptionRoutes } from "./routes/prescription";
 import { setupSocket } from "./utils/socketHandler";
 
 const createApp = () => {
@@ -51,6 +52,7 @@ const createApp = () => {
   app.use("/hospitals", hospitalRoutes);
   app.use("/users", userRoutes);
   app.use("/chat", chatRoutes);
+  app.use("prescriptions", prescriptionRoutes);
 
   setupSocket(io);
   app.use(/.*/, (req, res) => {
