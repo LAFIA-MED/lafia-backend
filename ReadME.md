@@ -63,7 +63,6 @@ The authentication system now uses a **two-step process**:
         "email": "user@example.com",
         "role": "PATIENT"
       },
-      "otp": "1234"
     }
     ```
   - **Error Responses:**
