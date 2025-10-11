@@ -2,7 +2,7 @@
 
 ## Base URL
 
-All endpoints are relative to your server root (e.g., `http://localhost:3000/`).
+All endpoints are relative to your server root (e.g., `https://lafia.pipeops.net/`).
 
 ---
 
