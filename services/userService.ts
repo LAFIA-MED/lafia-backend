@@ -18,8 +18,8 @@ export const createInitialUser = async (email: string, role: string) => {
             role: role.toUpperCase() as any,
             status: "PENDING_VERIFICATION",
             isVerified: false,
-            first_name: "",
-            last_name: "",
+            first_name: null,
+            last_name: null,
             gender: "MALE" as any,
         },
     });
