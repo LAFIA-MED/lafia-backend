@@ -3,44 +3,25 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - production # <- you deploy from 'production'
+      - production # Or replace with the branch you want to deploy from
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (not used on server, but fine to keep)
-        uses: actions/checkout@v4
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
 
+      # Step 2: Deploy to EC2 via SSH
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
+          username: ubuntu # Default username for Ubuntu AMI
           key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
           script: |
-            set -e
-            cd /var/www/html/lafia-backend
-
-            git config --global --add safe.directory /var/www/html/lafia-backend
-
-            git fetch --all --prune
-            git reset --hard origin/production
-
-            if command -v pnpm >/dev/null 2>&1; then
-              pnpm install --frozen-lockfile
-              pnpm run build
-            else
-              npm ci
-              npm run build
-            fi
-
-            if pm2 list | grep -q "lafia-backend"; then
-              pm2 reload lafia-backend --update-env
-            else
-              pm2 start dist/main.js --name lafia-backend
-            fi
-
-            pm2 save
+            cd /var/www/html/lafia-backend  # Path 
+            git pull origin production  # Pull the latest code from your repo
+            pm2 restart ts-node || pm2 reload ts-node # Restart the correct PM2 process
