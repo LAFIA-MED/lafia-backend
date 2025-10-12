@@ -3,19 +3,9 @@ module.exports = {
         {
             name: "lafia-backend",
             script: "dist/server.js",
-
-            // Automatically load environment variables from your .env file
-            env_file: ".env",
-
-            // Default environment (for dev/local runs)
-            env: {
-                NODE_ENV: "development"
-            },
-
-            // Production environment block (used when you run with --env production)
-            env_production: {
-                NODE_ENV: "production"
-            }
+            env_file: "/var/www/html/lafia-backend/.env", // use ABSOLUTE path
+            env: { NODE_ENV: "development" },
+            env_production: { NODE_ENV: "production" }
         }
     ]
 };
